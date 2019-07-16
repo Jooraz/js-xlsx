@@ -180,8 +180,61 @@ function sheet_to_formulae(sheet) {
 	cmds.length = i;
 	return cmds;
 }
+function sheet_add_json(_ws/*:?Worksheet*/, js/*:Array<any>*/, opts)/*:Worksheet*/ {
+	var o = opts || {};
+	var offset = +!o.skipHeader;
+	var ws/*:Worksheet*/ = _ws || ({}/*:any*/);
+	var _R = 0, _C = 0;
+	if(ws && o.origin != null) {
+		if(typeof o.origin == 'number') _R = o.origin;
+		else {
+			var _origin/*:CellAddress*/ = typeof o.origin == "string" ? decode_cell(o.origin) : o.origin;
+			_R = _origin.r; _C = _origin.c;
+		}
+	}
+	var cell/*:Cell*/;
+	var range/*:Range*/ = ({s: {c:0, r:0}, e: {c:_C, r:_R + js.length - 1 + offset}}/*:any*/);
+	if(ws['!ref']) {
+		var _range = safe_decode_range(ws['!ref']);
+		range.e.c = Math.max(range.e.c, _range.e.c);
+		range.e.r = Math.max(range.e.r, _range.e.r);
+		if(_R == -1) { _R = range.e.r + 1; range.e.r = _R + js.length - 1 + offset; }
+	}
+	var hdr/*:Array<string>*/ = o.header || [], C = 0;
+
+	js.forEach(function (JS, R/*:number*/) {
+		keys(JS).forEach(function(k) {
+			if((C=hdr.indexOf(k)) == -1) hdr[C=hdr.length] = k;
+			var v = JS[k];
+			var t = 'z';
+			var z = "";
+			if(v && typeof v === 'object' && !(v instanceof Date)){
+				ws[encode_cell({c:_C + C,r:_R + R + offset})] = v;
+			} else {
+				if(typeof v == 'number') t = 'n';
+				else if(typeof v == 'boolean') t = 'b';
+				else if(typeof v == 'string') t = 's';
+				else if(v instanceof Date) {
+					t = 'd';
+					if(!o.cellDates) { t = 'n'; v = datenum(v); }
+					z = o.dateNF || SSF._table[14];
+				}
+				ws[encode_cell({c:_C + C,r:_R + R + offset})] = cell = ({t:t, v:v}/*:any*/);
+				if(z) cell.z = z;
+			}
+		});
+	});
+	range.e.c = Math.max(range.e.c, _C + hdr.length - 1);
+	var __R = encode_row(_R);
+	if(offset) for(C = 0; C < hdr.length; ++C) ws[encode_col(C + _C) + __R] = {t:'s', v:hdr[C]};
+	ws['!ref'] = encode_range(range);
+	return ws;
+}
+function json_to_sheet(js/*:Array<any>*/, opts)/*:Worksheet*/ { return sheet_add_json(null, js, opts); }
 
 var utils = {
+	sheet_add_json: sheet_add_json,
+	json_to_sheet: json_to_sheet,
 	encode_col: encode_col,
 	encode_row: encode_row,
 	encode_cell: encode_cell,
